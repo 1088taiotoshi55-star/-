@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画像PDF変換（手動保存版）</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; text-align: center; }
+        .preview img { width: 100px; height: 100px; object-fit: cover; margin: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        #debugLog { background: #f0f0f0; padding: 10px; margin-top: 20px; text-align: left; font-size: 12px; height: 120px; overflow-y: scroll; border: 1px solid #999; }
+        button { padding: 12px 24px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 15px; }
+        button:disabled { background-color: #ccc; }
+        
+        /* 新しく追加したダウンロードリンクのスタイル */
+        #downloadArea { margin-top: 20px; padding: 20px; border: 2px dashed #007bff; display: none; background: #e7f3ff; }
+        #finalLink { font-size: 20px; font-weight: bold; color: #d00; text-decoration: underline; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h2>📷 画像PDF変換（Android対応版）</h2>
+    <p>写真を選んでください</p>
+    <input type="file" id="imageInput" multiple onchange="processFiles(this)">
+    
+    <div id="previewArea" class="preview"></div>
+    <button id="convertBtn" onclick="convertToPDF()" disabled>PDFを作成する</button>
+
+    <div id="downloadArea">
+        <p>🎉 PDFが完成しました！<br>下のリンクをタップして保存してください：</p>
+        <a id="finalLink" href="#" download="photos.pdf">👉 ここをタップしてPDFを保存 👈</a>
+    </div>
+
+    <h3>状況ログ</h3>
+    <div id="debugLog">準備完了。</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        var selectedImages = [];
+        
+        function log(msg) {
+            var box = document.getElementById('debugLog');
+            box.innerHTML = "> " + msg + "<br>" + box.innerHTML;
+        }
+
+        function processFiles(input) {
+            // ダウンロードエリアを隠す
+            document.getElementById('downloadArea').style.display = 'none';
+            
+            var files = input.files;
+            var previewArea = document.getElementById('previewArea');
+            var convertBtn = document.getElementById('convertBtn');
+
+            if (!files || files.length === 0) return;
+
+            previewArea.innerHTML = '';
+            selectedImages = [];
+            convertBtn.disabled = true;
+
+            var loadedCount = 0;
+            log(files.length + "枚の画像を処理中...");
+
+            for (var i = 0; i < files.length; i++) {
+                (function(index) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        selectedImages[index] = e.target.result;
+                        var img = document.createElement('img');
+                        img.src = e.target.result;
+                        previewArea.appendChild(img);
+                        loadedCount++;
+                        
+                        if (loadedCount === files.length) {
+                            convertBtn.disabled = false;
+                            log("準備完了。「PDFを作成する」を押してください。");
+                        }
+                    };
+                    reader.readAsDataURL(files[index]);
+                })(i);
+            }
+        }
+
+        function convertToPDF() {
+            log("PDFデータを作成中...");
+            if (!window.jspdf) { alert("エラー: ライブラリ未ロード"); return; }
+
+            try {
+                var jsPDF = window.jspdf.jsPDF;
+                var doc = new jsPDF();
+                
+                var pageWidth = doc.internal.pageSize.getWidth();
+                var pageHeight = doc.internal.pageSize.getHeight();
+                var margin = 10;
+
+                var validImages = selectedImages.filter(function(n){ return n != undefined });
+
+                for (var i = 0; i < validImages.length; i++) {
+                    var imgData = validImages[i];
+                    if (i > 0) doc.addPage();
+
+                    var imgProps = doc.getImageProperties(imgData);
+                    var ratio = imgProps.width / imgProps.height;
+                    var imgWidth = pageWidth - (margin * 2);
+                    var imgHeight = imgWidth / ratio;
+
+                    if (imgHeight > (pageHeight - margin * 2)) {
+                        imgHeight = pageHeight - (margin * 2);
+                        imgWidth = imgHeight * ratio;
+                    }
+                    doc.addImage(imgData, 'JPEG', margin, margin, imgWidth, imgHeight);
+                }
+
+                // 【重要】ここを変えました
+                // いきなり保存せず、データURLとしてリンクに埋め込みます
+                var pdfBlob = doc.output('blob');
+                var url = URL.createObjectURL(pdfBlob);
+                
+                var link = document.getElementById('finalLink');
+                link.href = url;
+                
+                // ダウンロードエリアを表示
+                document.getElementById('downloadArea').style.display = 'block';
+                log("★作成成功！画面に出た赤いリンクを押してください。");
+
+            } catch (e) {
+                log("失敗: " + e.message);
+                alert("エラー: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
